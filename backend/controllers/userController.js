@@ -16,23 +16,6 @@ const cloudinary = require("cloudinary");
 
 exports.registerUser = catchAsyncError(async (req, res, next) => {
     try {
-        // Log the incoming avatar data to verify
-        //console.log("Avatar Data: ", req.body.avatar);
-
-        // Validate avatar data
-        if (!req.body.avatar) {
-            return res.status(400).json({
-                success: false,
-                message: "Avatar is required",
-            });
-        }
-
-        // Upload avatar to Cloudinary
-        const myCloud = await cloudinary.v2.uploader.upload(req.body.avatar, {
-            folder: "avatars",
-            width: 150,
-            crop: "scale",
-        });
 
         const { name, email, password } = req.body;
 
@@ -41,8 +24,8 @@ exports.registerUser = catchAsyncError(async (req, res, next) => {
             email,
             password,
             avatar: {
-                public_id: myCloud.public_id,
-                url: myCloud.secure_url,
+                public_id: "default_avatar",
+                url: "/images/default_avatar.png",
             },
         });
 

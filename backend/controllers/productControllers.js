@@ -13,40 +13,24 @@ exports.createProduct = catchAsyncError(async (req, res, next) => {
 
   if (typeof req.body.images === "string") {
     images.push(req.body.images);
-  } else {
+  } else if (Array.isArray(req.body.images)) {
     images = req.body.images;
   }
 
-  const imagesLinks = await Promise.all(
-    images.map(async (image) => {
-      try {
-        if (typeof image === "string") {
-          const result = await cloudinary.v2.uploader.upload(image, {
-            folder: "products",
-          });
-
-          return {
-            public_id: result.public_id,
-            url: result.secure_url,
-          };
-        } else {
-          return image;
-        }
-      } catch (error) {
-        console.error(`Failed to upload image: ${image}`, error);
-        return null;
-      }
-    })
-  );
-
-  // Filter out any images that failed to upload
-  const validImagesLinks = imagesLinks.filter(link => link !== null);
-
-  if (validImagesLinks.length === 0) {
-    return next(new ErrorHandler("All image uploads failed. Please try again.", 400));
+  if (images.length === 0) {
+    return next(new ErrorHandler("Please add at least one product image", 400));
   }
 
-  req.body.images = validImagesLinks;
+  req.body.images = images.map((image, index) => {
+    if (typeof image === "string") {
+      return {
+        public_id: `product_${Date.now()}_${index}`,
+        url: image,
+      };
+    }
+    return image;
+  });
+
   req.body.user = req.user.id;
 
   const product = await Product.create(req.body);
