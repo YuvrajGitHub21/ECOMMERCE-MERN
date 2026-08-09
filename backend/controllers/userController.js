@@ -10,7 +10,6 @@ const sendEmail = require("../utils/sendEmail.js");
 const crypto = require("crypto");
 const { response } = require("express");
 
-const cloudinary = require("cloudinary");
 
 // REGISTER A USER
 
@@ -194,22 +193,11 @@ exports.updateProfile = catchAsyncError(async (req, res, next) => {
         email: req.body.email,
     };
 
-    if (req.body.avatar !== "") {
-        const user = await User.findById(req.user.id);
-
-        const imageId = user.avatar.public_id;
-
-        await cloudinary.v2.uploader.destroy(imageId);
-
-        const myCloud = await cloudinary.v2.uploader.upload(req.body.avatar, {
-            folder: "avatars",
-            width: 150,
-            crop: "scale",
-        });
-
+    // Avatar is stored as a base64 data URI on the user document.
+    if (req.body.avatar && req.body.avatar !== "") {
         newUserData.avatar = {
-            public_id: myCloud.public_id,
-            url: myCloud.secure_url,
+            public_id: `avatar_${req.user.id}_${Date.now()}`,
+            url: req.body.avatar,
         };
     }
     const user = await User.findByIdAndUpdate(req.user.id, newUserData, {
@@ -286,9 +274,7 @@ exports.deleteUser = catchAsyncError(async (req, res, next) => {
         );
     }
 
-    const imageId = user.avatar.public_id;
-
-    await cloudinary.v2.uploader.destroy(imageId);
+    // Avatar lives on the document itself, so deleting the user removes it.
 
     res.status(200).json({
         success: true,

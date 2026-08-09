@@ -4,24 +4,18 @@ const ErrorHandler = require("../utils/errorHandler");
 const catchAsyncError = require("../middleware/catchAsyncError");
 const ApiFeatures = require("../utils/appFeature");
 
-const cloudinary = require("cloudinary");
-
-//create product -- admin
-
-exports.createProduct = catchAsyncError(async (req, res, next) => {
+// Images are stored as base64 data URIs directly on the product document.
+// Accepts a single string, an array of strings, or already-shaped image objects.
+const toImageDocs = (rawImages) => {
   let images = [];
 
-  if (typeof req.body.images === "string") {
-    images.push(req.body.images);
-  } else if (Array.isArray(req.body.images)) {
-    images = req.body.images;
+  if (typeof rawImages === "string") {
+    images.push(rawImages);
+  } else if (Array.isArray(rawImages)) {
+    images = rawImages;
   }
 
-  if (images.length === 0) {
-    return next(new ErrorHandler("Please add at least one product image", 400));
-  }
-
-  req.body.images = images.map((image, index) => {
+  return images.map((image, index) => {
     if (typeof image === "string") {
       return {
         public_id: `product_${Date.now()}_${index}`,
@@ -30,7 +24,18 @@ exports.createProduct = catchAsyncError(async (req, res, next) => {
     }
     return image;
   });
+};
 
+//create product -- admin
+
+exports.createProduct = catchAsyncError(async (req, res, next) => {
+  const images = toImageDocs(req.body.images);
+
+  if (images.length === 0) {
+    return next(new ErrorHandler("Please add at least one product image", 400));
+  }
+
+  req.body.images = images;
   req.body.user = req.user.id;
 
   const product = await Product.create(req.body);
@@ -91,35 +96,14 @@ exports.updateProduct = catchAsyncError(async (req, res, next) => {
         return next(new ErrorHandler("Product not found", 404));
     }
 
-    // Images Start Here
-    let images = [];
+    // Only replace images when new ones were submitted; otherwise leave the
+    // existing ones untouched rather than wiping them.
+    const images = toImageDocs(req.body.images);
 
-    if (typeof req.body.images === "string") {
-        images.push(req.body.images);
+    if (images.length > 0) {
+        req.body.images = images;
     } else {
-        images = req.body.images;
-    }
-
-    if (images !== undefined) {
-        // Deleting Images From Cloudinary
-        for (let i = 0; i < product.images.length; i++) {
-            await cloudinary.v2.uploader.destroy(product.images[i].public_id);
-        }
-
-        const imagesLinks = [];
-
-        for (let i = 0; i < images.length; i++) {
-            const result = await cloudinary.v2.uploader.upload(images[i], {
-                folder: "products",
-            });
-
-            imagesLinks.push({
-                public_id: result.public_id,
-                url: result.secure_url,
-            });
-        }
-
-        req.body.images = imagesLinks;
+        delete req.body.images;
     }
 
     product = await Product.findByIdAndUpdate(req.params.id, req.body, {
@@ -143,10 +127,7 @@ exports.deleteProduct = catchAsyncError(async (req, res, next) => {
         return next(new ErrorHandler("Product not found", 404));
     }
 
-    // Deleting Images From Cloudinary
-    for (let i = 0; i < product.images.length; i++) {
-        await cloudinary.v2.uploader.destroy(product.images[i].public_id);
-    }
+    // Images live on the document itself, so deleting the product removes them.
 
     res.status(200).json({
         success: true,

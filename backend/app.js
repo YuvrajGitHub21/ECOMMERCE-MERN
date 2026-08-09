@@ -14,8 +14,10 @@ if (process.env.NODE_ENV !== "PRODUCTION") {
 }
 
 
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
+// Images are stored as base64 inside MongoDB documents, which have a hard
+// 16MB BSON limit. 13mb leaves headroom for the rest of the document.
+app.use(express.json({ limit: "13mb" }));
+app.use(express.urlencoded({ limit: "13mb", extended: true }));
 
 app.use(cookieParser());
 

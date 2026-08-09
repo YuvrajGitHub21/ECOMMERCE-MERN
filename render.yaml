@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: ecommerce-mern
+    name: groceryeasy
     runtime: node
     plan: free
     region: singapore
