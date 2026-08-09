@@ -1,0 +1,46 @@
+services:
+  - type: web
+    name: ecommerce-mern
+    runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    autoDeploy: true
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/v1
+    envVars:
+      # Build/runtime configuration
+      - key: NODE_VERSION
+        value: "20.11.1"
+      - key: NODE_ENV
+        value: PRODUCTION
+      # react-scripts treats warnings as errors when CI=true
+      - key: CI
+        value: "false"
+
+      # Secrets — set these in the Render dashboard, not in this file.
+      - key: DB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRE
+        sync: false
+      - key: COOKIE_EXPIRE
+        sync: false
+      - key: CLOUDINARY_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: SMPT_HOST
+        sync: false
+      - key: SMPT_PORT
+        sync: false
+      - key: SMPT_SERVICE
+        sync: false
+      - key: SMPT_MAIL
+        sync: false
+      - key: SMPT_PASSWORD
+        sync: false
