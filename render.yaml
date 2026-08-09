@@ -20,6 +20,7 @@ services:
         value: "false"
 
       # Secrets — set these in the Render dashboard, not in this file.
+      # Do NOT set PORT; Render injects it automatically.
       - key: DB_URI
         sync: false
       - key: JWT_SECRET
@@ -28,19 +29,8 @@ services:
         sync: false
       - key: COOKIE_EXPIRE
         sync: false
-      - key: CLOUDINARY_NAME
-        sync: false
-      - key: CLOUDINARY_API_KEY
-        sync: false
-      - key: CLOUDINARY_API_SECRET
-        sync: false
-      - key: SMPT_HOST
-        sync: false
-      - key: SMPT_PORT
-        sync: false
-      - key: SMPT_SERVICE
-        sync: false
-      - key: SMPT_MAIL
-        sync: false
-      - key: SMPT_PASSWORD
-        sync: false
+
+      # Optional — add these in the dashboard when the credentials exist.
+      # Without CLOUDINARY_*, product/avatar image upload fails.
+      # Without SMPT_*, forgot-password email fails.
+      # The rest of the storefront works fine without them.
