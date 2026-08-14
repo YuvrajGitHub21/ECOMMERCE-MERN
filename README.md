@@ -38,18 +38,22 @@ Requires Docker.
 
 ```bash
 cp .env.example .env
-docker compose up -d
+docker compose --profile core up -d
 ```
 
-| Service | URL | Notes |
-|---|---|---|
-| PostgreSQL | `localhost:5432` | `pg_trgm`, `unaccent`, `citext` pre-installed |
-| Redis | `localhost:6379` | |
-| Mailpit | http://localhost:8025 | catches all outbound mail; nothing leaves your machine |
-| MinIO console | http://localhost:9001 | S3-compatible storage, same API as Cloudflare R2 |
-| Aspire dashboard | http://localhost:18888 | OpenTelemetry traces, metrics and logs |
+Every service belongs to a profile, so the `--profile` flag is required — a bare `docker compose up -d` starts nothing.
 
-`docker compose down` stops everything; `down -v` also deletes the data volumes.
+| Profile | Service | URL | Notes |
+|---|---|---|---|
+| `core` | PostgreSQL | `localhost:5432` | `pg_trgm`, `unaccent`, `citext` pre-installed |
+| `core` | Redis | `localhost:6379` | |
+| `full` | Mailpit | http://localhost:8025 | catches all outbound mail; nothing leaves your machine |
+| `full` | MinIO console | http://localhost:9001 | S3-compatible storage, same API as Cloudflare R2 |
+| `full` | Aspire dashboard | http://localhost:18888 | OpenTelemetry traces, metrics and logs |
+
+`core` is enough for API and database work. Use `docker compose --profile full up -d` once email verification, image upload or tracing are involved.
+
+`docker compose --profile full down` stops everything; add `-v` to also delete the data volumes.
 
 The API and web app land in Phase 1 and Phase 3 respectively.
 
