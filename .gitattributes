@@ -1,0 +1,34 @@
+# Normalise line endings. Development happens on Windows, CI runs on Linux —
+# without this every diff carries CRLF noise and `dotnet format --verify-no-changes`
+# fails in CI for reasons unrelated to the code.
+* text=auto eol=lf
+
+# Windows-only scripts must keep CRLF or they break when executed.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Shell scripts must keep LF even if checked out on Windows.
+*.sh   text eol=lf
+
+# Explicitly binary — never normalise, never diff.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.jfif  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.pdf   binary
+*.woff  binary
+*.woff2 binary
+
+# Generated files are excluded from language stats and diffs.
+package-lock.json  linguist-generated=true -diff
+
+# The frozen legacy app is exempt from eol normalisation. Without `-text`, the
+# `* text=auto eol=lf` rule above would renormalise these files on a future
+# `git add`, producing content diffs on code that is supposed to never change.
+# `linguist-vendored` also keeps it out of the repo's language statistics, so
+# GitHub reports this as a C#/TypeScript project rather than a JavaScript one.
+legacy-node/**     -text linguist-vendored=true
