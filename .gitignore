@@ -1,24 +1,59 @@
+# ---------------------------------------------------------------------------
+# Legacy MERN app (frozen at tag v1-legacy-node — see docs/legacy-audit.md)
+# ---------------------------------------------------------------------------
+legacy-node/node_modules
+legacy-node/frontend/node_modules
+legacy-node/frontend/.pnp
+legacy-node/frontend/.pnp.js
+legacy-node/frontend/coverage
+legacy-node/frontend/build
+legacy-node/backend/config/config.env
 
-# dependencies
-/node_modules
-/frontend/node_modules
-/frontend/.pnp
-/frontend/.pnp.js
+# ---------------------------------------------------------------------------
+# .NET
+# ---------------------------------------------------------------------------
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Ll]og/
+[Ll]ogs/
+*.user
+*.suo
+*.userprefs
+.vs/
+*.received.*
+TestResults/
+coverage/
+*.coverage
+*.trx
 
-# testing
-/frontend/coverage
+# ---------------------------------------------------------------------------
+# New frontend (Vite + React + TS)
+# ---------------------------------------------------------------------------
+frontend/web/node_modules
+frontend/web/dist
+frontend/web/.vite
+frontend/web/playwright-report
+frontend/web/test-results
 
-# production
-/frontend/build
+# ---------------------------------------------------------------------------
+# Local environment — .env.example IS committed, .env is never committed
+# ---------------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+!.env.example
 
-# misc
-/backend/config/config.env
-/frontend/.DS_Store
-/frontend/.env.local
-/frontend/.env.development.local
-/frontend/.env.test.local
-/frontend/.env.production.local
+# ---------------------------------------------------------------------------
+# Docker / local data volumes
+# ---------------------------------------------------------------------------
+.docker-data/
 
+# ---------------------------------------------------------------------------
+# Misc
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
