@@ -5,6 +5,15 @@
 # Everything starts by default so that a clean clone works with one command.
 # To run a subset instead:  docker compose up -d postgres redis
 #
+# Note on `--wait`: do not use it with this file. `minio-init` is a one-shot
+# container that creates the bucket and exits 0, and `--wait` treats any exited
+# container as a failure (returns 1 even though the stack is healthy). Naming
+# only the long-running services works around the exit code but then skips
+# minio-init altogether, so the bucket is never created — worse, and silently.
+# Use plain `up -d`, which exits 0 and runs everything. From Phase 1 the api
+# service will depend on minio-init via `service_completed_successfully`, and
+# CI should wait on the API's /health/ready rather than on container state.
+#
 # Ports
 #   5432   postgres
 #   6379   redis
