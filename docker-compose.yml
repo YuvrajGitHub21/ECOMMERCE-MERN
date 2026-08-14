@@ -1,0 +1,128 @@
+# GroceryEasy — local development infrastructure.
+#
+#   cp .env.example .env && docker compose up -d
+#
+# Everything starts by default so that a clean clone works with one command.
+# To run a subset instead:  docker compose up -d postgres redis
+#
+# Ports
+#   5432   postgres
+#   6379   redis
+#   8025   mailpit web UI          (SMTP on 1025)
+#   9001   minio console           (S3 API on 9000)
+#   18888  aspire dashboard        (OTLP ingest on 18889)
+
+name: groceryeasy
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: groceryeasy-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-groceryeasy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-groceryeasy}
+      POSTGRES_DB: ${POSTGRES_DB:-groceryeasy}
+      # Deterministic collation, so ORDER BY behaves identically here and in CI.
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=en-US"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Runs only on an empty volume, so the extensions exist before EF Core's
+      # first migration. Re-run with: docker compose down -v && docker compose up
+      - ./deploy/postgres/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      # The -d/-U flags matter: without them pg_isready reports ready during the
+      # initdb bootstrap phase, before the real database accepts connections.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-groceryeasy} -d ${POSTGRES_DB:-groceryeasy}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: groceryeasy-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", ""]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # SMTP catcher. Mailpit, not MailHog — MailHog has been unmaintained since 2020.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: groceryeasy-mailpit
+    restart: unless-stopped
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # S3-compatible object storage. Same API as Cloudflare R2 in production, so
+  # the application uses one code path in both environments.
+  minio:
+    image: minio/minio:latest
+    container_name: groceryeasy-minio
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-groceryeasy}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-groceryeasy-dev-secret}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: creates the bucket, then exits 0. Expected to show as "Exited (0)".
+  minio-init:
+    image: minio/mc:latest
+    container_name: groceryeasy-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 '${MINIO_ROOT_USER:-groceryeasy}' '${MINIO_ROOT_PASSWORD:-groceryeasy-dev-secret}' &&
+      mc mb --ignore-existing local/${S3_BUCKET:-groceryeasy} &&
+      mc anonymous set download local/${S3_BUCKET:-groceryeasy} &&
+      echo 'bucket ${S3_BUCKET:-groceryeasy} ready'
+      "
+    restart: "no"
+
+  # OpenTelemetry traces, metrics and logs. Standalone — no Aspire AppHost needed.
+  aspire-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:latest
+    container_name: groceryeasy-aspire
+    restart: unless-stopped
+    environment:
+      DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+    ports:
+      - "${ASPIRE_UI_PORT:-18888}:18888"
+      - "${ASPIRE_OTLP_PORT:-18889}:18889"
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:

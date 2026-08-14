@@ -1,0 +1,45 @@
+<Project>
+
+  <!--
+    Applies to every project under backend/ (src and tests alike).
+
+    TreatWarningsAsErrors is on from the first commit deliberately. It is
+    painless now and unbearable to retrofit once there are nine projects and a
+    few hundred accumulated warnings.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+
+    <!-- Deterministic builds so CI output is reproducible. -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+
+    <!-- Culture-sensitive formatting is a correctness bug waiting to happen in
+         an app that deals in ₹ and IST. Fail the build on implicit conversions. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- CS1591: missing XML comment on a public member. Documentation is
+         generated for OpenAPI descriptions, not to force a comment on
+         every DTO property. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <Company>GroceryEasy</Company>
+    <Product>GroceryEasy</Product>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('Tests'))">
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+</Project>
