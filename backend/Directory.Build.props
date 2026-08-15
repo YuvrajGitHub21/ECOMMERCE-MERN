@@ -40,6 +40,14 @@
   <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('Tests'))">
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+
+    <!--
+      xUnit v3 is built on Microsoft.Testing.Platform, and the .NET 10 SDK dropped
+      VSTest support for MTP-based projects entirely: without this, `dotnet test`
+      fails with "Testing with VSTest target is no longer supported". This opts
+      `dotnet test` into running the test project as the executable it is.
+    -->
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
   </PropertyGroup>
 
 </Project>

@@ -25,11 +25,15 @@
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
 
+  <!--
+    xUnit v3 runs on Microsoft.Testing.Platform, and the .NET 10 SDK removed VSTest
+    support for MTP projects. The whole VSTest package set — Microsoft.NET.Test.Sdk,
+    xunit.runner.visualstudio and coverlet.collector — is therefore absent by design,
+    not by oversight: xunit.v3 carries the runner itself. The opt-in lives in
+    global.json, and TRX and coverage come from MTP extensions added in the CI task.
+  -->
   <ItemGroup Label="Testing">
-    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageVersion Include="Shouldly" Version="4.3.0" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
     <PackageVersion Include="xunit.v3" Version="4.0.0" />
   </ItemGroup>
 
