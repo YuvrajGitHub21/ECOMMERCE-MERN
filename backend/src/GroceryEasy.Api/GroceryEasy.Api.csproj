@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\GroceryEasy.Application\GroceryEasy.Application.csproj" />
+    <ProjectReference Include="..\GroceryEasy.Infrastructure\GroceryEasy.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <!--
+    WebApplicationFactory<Program> in the integration tests needs to see the
+    generated Program class, which top-level statements make internal.
+    Program.cs redeclares it as `public partial class Program`, so no
+    InternalsVisibleTo is required.
+  -->
+
+</Project>

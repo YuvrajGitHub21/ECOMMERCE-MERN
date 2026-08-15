@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The innermost layer. It has no ItemGroup because it has no dependencies —
+    not on another project, and not on a NuGet package. An architecture test
+    asserts both, so this file staying empty is enforced rather than hoped for.
+  -->
+
+</Project>

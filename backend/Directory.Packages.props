@@ -11,8 +11,13 @@
 
     Versions are added as each phase needs them rather than speculatively —
     an unused pinned dependency is still a dependency you are on the hook for.
-    See the pending ADR-0004 on dependency governance for why MediatR,
-    AutoMapper and FluentAssertions are deliberately absent.
+    See ADR-0004 on dependency governance for why MediatR, AutoMapper and
+    FluentAssertions are deliberately absent.
+
+    Every version here was resolved by `dotnet add package` rather than typed
+    from memory. Asset metadata (IncludeAssets/PrivateAssets) belongs on the
+    PackageReference in the consuming project, not here — this file's job is
+    versions and nothing else.
   -->
 
   <PropertyGroup>
@@ -20,10 +25,12 @@
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
 
-  <ItemGroup Label="Populated in Phase 1">
-    <!-- EF Core + Npgsql, ASP.NET Core Identity, Serilog, FluentValidation,
-         Scrutor, Scalar, xUnit v3, Shouldly, Testcontainers, Respawn,
-         NetArchTest. -->
+  <ItemGroup Label="Testing">
+    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageVersion Include="Shouldly" Version="4.3.0" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
+    <PackageVersion Include="xunit.v3" Version="4.0.0" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <!--
+    References all four production projects deliberately. The rules are asserted
+    by loading each assembly and inspecting its real dependencies, so this is
+    the one project allowed to see everything.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\GroceryEasy.Domain\GroceryEasy.Domain.csproj" />
+    <ProjectReference Include="..\..\src\GroceryEasy.Application\GroceryEasy.Application.csproj" />
+    <ProjectReference Include="..\..\src\GroceryEasy.Infrastructure\GroceryEasy.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\GroceryEasy.Api\GroceryEasy.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Shouldly" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>
