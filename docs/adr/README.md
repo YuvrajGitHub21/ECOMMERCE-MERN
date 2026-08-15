@@ -29,7 +29,9 @@ Recorded here so the numbering is stable and the intent is visible before the co
 | 0010 | Single-database multi-tenancy with a `store_id` discriminator | 2 |
 | 0011 | Run migrations at release, never at application startup | 6 |
 | 0012 | Hangfire over bare hosted services for background work | 5 |
+| 0014 | Minimal APIs with an `IEndpoint` convention over MVC controllers | 1 |
 
 ## Related
 
+- [`docs/engineering-decisions.md`](../engineering-decisions.md) — the narrative overview of every decision with its rejected alternatives, plus the phase-by-phase roadmap. Start there for the whole picture; come here for the formal record of any single decision.
 - [`docs/legacy-audit.md`](../legacy-audit.md) — the 20 defects in the pre-rewrite system, each mapped to the design decision that makes its class of bug unrepresentable.

@@ -24,7 +24,9 @@ That document is the most useful thing in this repository right now.
 
 ## Architecture decisions
 
-Recorded as they are made, in [`docs/adr/`](docs/adr/README.md). The ones that shape everything else:
+**→ [`docs/engineering-decisions.md`](docs/engineering-decisions.md)** — every significant technical choice, the alternatives weighed against it, what it costs, and the phase-by-phase roadmap. Why Clean Architecture over N-tier or pure vertical slices, why Minimal APIs over MVC controllers, why PostgreSQL full-text search instead of Elasticsearch, and so on.
+
+The formal per-decision record lives in [`docs/adr/`](docs/adr/README.md). The ones that shape everything else:
 
 | | |
 |---|---|
