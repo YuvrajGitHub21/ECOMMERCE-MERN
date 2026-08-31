@@ -1,5 +1,4 @@
 <Project>
-
   <!--
     Central Package Management: every NuGet version is declared here once, and
     project files reference packages without a Version attribute:
@@ -19,12 +18,10 @@
     PackageReference in the consuming project, not here — this file's job is
     versions and nothing else.
   -->
-
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
-
   <!--
     xUnit v3 runs on Microsoft.Testing.Platform, and the .NET 10 SDK removed VSTest
     support for MTP projects. The whole VSTest package set — Microsoft.NET.Test.Sdk,
@@ -32,9 +29,22 @@
     not by oversight: xunit.v3 carries the runner itself. The opt-in lives in
     global.json, and TRX and coverage come from MTP extensions added in the CI task.
   -->
+  <ItemGroup Label="Application">
+    <!--
+      FluentValidation, not FluentAssertions. The names are close enough to be worth
+      stating: FluentAssertions v8 moved to a commercial licence and is banned by
+      ADR-0004, while FluentValidation remains Apache-2.0 and is used freely here.
+    -->
+    <PackageVersion Include="FluentValidation" Version="12.1.1" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+    <!-- Assembly scanning and, more importantly, open-generic Decorate<> for the
+         handler pipeline. Replaces the part of MediatR that ADR-0004 rules out. -->
+    <PackageVersion Include="Scrutor" Version="7.0.0" />
+  </ItemGroup>
   <ItemGroup Label="Testing">
     <PackageVersion Include="Shouldly" Version="4.3.0" />
     <PackageVersion Include="xunit.v3" Version="4.0.0" />
   </ItemGroup>
-
 </Project>

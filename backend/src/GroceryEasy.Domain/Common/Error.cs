@@ -17,6 +17,12 @@ namespace GroceryEasy.Domain.Common;
 /// exists. See the login and forgot-password flows, where that is the whole point.
 /// </para>
 /// </remarks>
+/// <para>
+/// Not <see langword="sealed"/>, for exactly one reason: <see cref="ValidationError"/> needs to
+/// carry a list of per-field failures so the API can render a populated RFC 9457 <c>errors</c>
+/// member, and a <see cref="Result"/> holds only one <see cref="Error"/>. That is the only
+/// derived type there should ever be.
+/// </para>
 /// <param name="Code">Stable machine-readable identifier, e.g. <c>Auth.EmailAlreadyInUse</c>.</param>
 /// <param name="Description">Human-readable explanation.</param>
 /// <param name="Type">The kind of failure, which determines the HTTP status code.</param>
@@ -28,7 +34,7 @@ namespace GroceryEasy.Domain.Common;
         "assembly is consumed only by the C# projects in this solution and is never shipped " +
         "as a library, so the cross-language concern does not apply. 'Error' is the name the " +
         "whole codebase reads best, and every alternative (Err, Fault, ErrorInfo) is worse.")]
-public sealed record Error(string Code, string Description, ErrorType Type)
+public record Error(string Code, string Description, ErrorType Type)
 {
     /// <summary>
     /// The absence of an error. A successful <see cref="Result"/> always carries this, and
