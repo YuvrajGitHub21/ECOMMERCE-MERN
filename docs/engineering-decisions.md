@@ -12,6 +12,8 @@ The rule that keeps these from drifting: **this document summarises, ADRs decide
 
 A third document, [`docs/legacy-audit.md`](legacy-audit.md), catalogues the 20 defects in the pre-rewrite MERN app. Many decisions here exist specifically to make one of those defect classes unrepresentable; those are tagged `[L-nn]`.
 
+A fourth, [`docs/plans/`](plans/README.md), holds the original working plans written before each phase began — useful for the reasoning behind the phase sequencing, but not kept in sync with implementation. Where it disagrees with this document, this document wins.
+
 ---
 
 # Part 1 — Decisions
@@ -24,11 +26,26 @@ A third document, [`docs/legacy-audit.md`](legacy-audit.md), catalogues the 20 d
 
 **Chosen: full ASP.NET Core rewrite.**
 
-Not because Node is worse — a TypeScript/NestJS rebuild would have been perfectly respectable and roughly 30% faster to reach. The deciding factor is that a portfolio project's job is to be **defensible line-by-line in an interview at the kind of company you want to work for**, and that target is a C# shop. A strong Node codebase is a weaker artifact in that room than a strong C# one, regardless of engineering merit.
+**The technical criteria that actually drove it** — properties this specific workload needs, not a subjective preference:
 
-The hybrid was rejected as the worst of both: two stacks to maintain, two deployment stories, and a thinner C# surface than either pure option.
+- **Runtime-enforced typing, not just editor-time typing.** TypeScript's types are erased at compile time — nothing stops a malformed JSON body from being assigned to a typed variable at runtime; validation is a separate, easy-to-skip step (Zod, class-validator). C#'s type system is enforced by the CLR itself: a `decimal` field cannot hold a string, ever. This maps directly onto two audited legacy bugs: `L-17` (`pinCode`/`phoneNo` stored as JS `Number`, silently losing leading zeros) and `L-01` (arbitrary JSON accepted straight into order totals, with no structural barrier stopping it).
+- **A concurrency model where CPU-bound work doesn't stall the whole process.** Node runs a single-threaded event loop — a synchronous CPU-bound handler (bulk pricing math over a large cart, image resizing) blocks *every other in-flight request* until it returns, unless a developer remembers to offload it to `worker_threads`. ASP.NET Core's `Task`-based async model runs on a real, auto-scaling thread pool: a slow handler ties up one worker thread, not the server's ability to serve everyone else.
+- **A first-party, vetted identity system.** ASP.NET Core Identity ships in the framework — password hashing, lockout, security stamps, token providers, all vetted. Node has no canonical equivalent; Passport.js and NestJS's auth modules are thin wrappers a team still has to get right itself. The legacy app's actual auth bug (`L-08`, a missing `return` that re-hashed the password on every save) is exactly the failure mode of hand-rolling this without a framework-owned answer.
+- **A mature ORM for a genuinely relational, constraint-heavy schema.** EF Core's LINQ-to-SQL translation, first-class versioned migrations, and change-tracking are ahead of Prisma (weaker for building up complex, conditionally-composed queries across methods than LINQ's expression trees) and TypeORM (widely reported migration-generation reliability issues) for a schema that leans on `CHECK` constraints, foreign keys, and a hand-written conditional `UPDATE` for inventory concurrency (`D2`).
+- **First-party real-time and background-job stacks.** SignalR and Hangfire are mature and either first-party (SignalR) or the de facto standard (Hangfire); Node's equivalents (Socket.IO, BullMQ) are perfectly good but third-party, with more integration surface to own.
+
+None of this makes Node *wrong* — a TypeScript/NestJS rebuild would have been perfectly respectable and roughly 30% faster to reach, and Node's single-threaded model is genuinely excellent for I/O-bound throughput, which is most of this workload. **The one honest non-technical factor**, stated separately so it doesn't get confused with the engineering case above: a portfolio project's job is to be defensible in an interview at the kind of company you want to work for, and that target is a C# shop. That reason explains the *timing and audience* of the decision — not its technical merit — and shouldn't be the answer given when an interviewer asks "why C#" technically.
+
+The hybrid (Node for catalogue, .NET for orders) was rejected as the worst of both: two stacks to maintain, two deployment stories, and a thinner C# surface than either pure option.
 
 **Cost:** everything is rewritten rather than improved, so nothing ships until Phase 4. All Node/Express knowledge embedded in the old codebase is discarded rather than built on.
+
+**Why not Python, Rust, Go, or Java?** These weren't live options during planning — the legacy app was already Node, so the real decision was *modernise in place vs. rewrite in C#* — but each is a credible backend platform an interviewer may raise. The one-line technical verdict on each, with the full case, a comparison table, and rehearsable Q&A in [`docs/concepts/language-platform-choice.md`](concepts/language-platform-choice.md):
+
+- **Python (Django/FastAPI):** the GIL blocks true CPU-bound parallelism within one process; type hints are optional and not runtime-enforced — the same erasure problem as TypeScript, in an ecosystem more permissive about it by convention.
+- **Rust (Axum/Actix + Diesel/SeaORM):** the strongest technical ceiling on raw performance and memory safety of any option considered, but this workload is I/O-bound, not CPU-bound, so that ceiling doesn't move the needle here — while the borrow checker meaningfully slows iteration speed on fast-changing CRUD business logic, and the ORM/Identity/real-time ecosystem is younger than .NET's.
+- **Go:** a genuinely comparable concurrency model (goroutines vs. `Task`-based async — close to a wash), but no LINQ-equivalent for composable relational queries, no EF Core-equivalent migrations story, and no first-party Identity system.
+- **Java (Spring Boot):** the most honest near-tie of the four — a mature ORM (Hibernate/JPA), a real Identity-equivalent (Spring Security), mature scheduling (Quartz). It would have been an equally defensible technical choice; C# wins mainly on LINQ's compile-time-checked query composition versus JPQL/Criteria API, and otherwise the decision comes down to the same audience-fit reason as above.
 
 ### A2. .NET 10 (LTS) — [ADR-0013](adr/0013-target-dotnet-10-lts.md)
 
@@ -39,6 +56,8 @@ The hybrid was rejected as the worst of both: two stacks to maintain, two deploy
 Also brings things the design already assumes: `Guid.CreateVersion7()`, `HybridCache`, built-in OpenAPI, `TimeProvider`.
 
 **Cost:** a few third-party packages may lag on .NET 10 support.
+
+**Deeper dive:** [`docs/concepts/dotnet-version-choice.md`](concepts/dotnet-version-choice.md).
 
 ### A3. PostgreSQL over MongoDB — [ADR-0002](adr/0002-postgresql-over-mongodb.md)
 
@@ -51,6 +70,8 @@ What Postgres buys, concretely: **real transactions** (reserve inventory + book 
 The split option was rejected as unjustifiable complexity: two databases and a sync problem, for a catalogue of a few thousand rows.
 
 **Cost:** schema changes need migrations. A one-time migration tool must be built. Embedded documents (reviews, addresses) become joins.
+
+**Deeper dive:** [`docs/concepts/database-choice.md`](concepts/database-choice.md).
 
 ---
 
@@ -66,6 +87,8 @@ The strangler pattern solves exactly one problem: migrating a system carrying **
 
 **Cost:** no incremental delivery — nothing user-visible ships until Phase 4. The cutover is one unrehearsed event. Forgoes hands-on experience with a genuinely valuable industry pattern, partly offset by prototyping YARP as a one-evening artifact in Phase 6 and documenting it as *evaluated and rejected*.
 
+**Deeper dive:** [`docs/concepts/migration-strategy.md`](concepts/migration-strategy.md).
+
 ### B2. Freeze and document the legacy defects rather than fix them
 
 **Options:** fix all 20 defects in Express first · fix only the ~6 critical ones · freeze and document.
@@ -73,6 +96,8 @@ The strangler pattern solves exactly one problem: migrating a system carrying **
 Patching code that gets deleted in six weeks costs 2–3 weeks of a 14-week budget. The alternative deliverable — [`docs/legacy-audit.md`](legacy-audit.md), where each defect is mapped to the design element that makes its *class* unrepresentable — is both cheaper and a far better artifact. *"I audited my own three-year-old code, found a forgeable order total and an admin guard that had never executed, and here is the architecture that makes each one impossible"* is a senior narrative. *"I added a null check"* is not.
 
 **Cost:** the frozen demo is exploitable if anyone pokes it. Mitigated by it not being publicly linked.
+
+**Deeper dive:** [`docs/concepts/technical-debt-triage.md`](concepts/technical-debt-triage.md).
 
 ---
 
@@ -98,6 +123,8 @@ Three concrete reasons, not aesthetics:
 
 **Cost:** more projects and more ceremony — a trivial CRUD endpoint touches four of them. The real risk is **Clean Architecture theatre**: interfaces that exist only to satisfy a diagram. Mitigated deliberately by C6 (no generic repository — three repositories total) and by projecting directly in EF queries rather than mapping through layers.
 
+**Deeper dive:** [`docs/concepts/clean-architecture.md`](concepts/clean-architecture.md) · [`onion-architecture.md`](concepts/onion-architecture.md) · [`n-tier-architecture.md`](concepts/n-tier-architecture.md).
+
 ### C2. Vertical slices *inside* the layers — ADR-0003 (Phase 1)
 
 Not either/or with C1. Keep the four-project boundary, but organise `Application` **by feature, not by technical type**:
@@ -113,6 +140,8 @@ Features/Orders/PlaceOrder/
 A folder of forty `IOrderService.cs` interfaces is the junior smell; co-located slices are the senior one. Everything a feature needs is in one folder, so changing it means opening one place. You get the compile-time barriers of layers *and* the locality of slices.
 
 **Cost:** some duplication between slices that a shared service would have centralised — accepted, because premature sharing between use cases is how god-services are born.
+
+**Deeper dive:** [`docs/concepts/vertical-slice-architecture.md`](concepts/vertical-slice-architecture.md).
 
 ### C3. Minimal APIs over MVC controllers — ADR-0014 (Phase 1)
 
@@ -139,6 +168,8 @@ One endpoint per type, auto-registered by assembly scan, living in the slice fol
 
 **Cost:** you must write the registration convention yourself, or `Program.cs` becomes a wall of `app.MapPost(...)` calls. Endpoint filters are less capable than MVC action filters — cross-cutting concerns move into the Application pipeline behaviours instead, which is arguably where they belonged. And a controller-native developer joining later needs a short ramp.
 
+**Deeper dive:** [`docs/concepts/minimal-apis.md`](concepts/minimal-apis.md) · [`mvc-controllers.md`](concepts/mvc-controllers.md).
+
 ### C4. No MediatR, AutoMapper or FluentAssertions — ADR-0004 (Phase 1)
 
 **MediatR** moved to a commercial licence at v13 (September 2025); **AutoMapper** followed from the same vendor; **FluentAssertions** did the same at v8. Taking a paid dependency on a portfolio project is wrong, and silently pinning the last free version is worse — it looks like an oversight rather than a decision.
@@ -148,6 +179,8 @@ Replacements: a **hand-rolled dispatcher** (~150 lines including behaviours, reg
 Manual mapping is not a consolation prize. AutoMapper moves mapping bugs from compile time to runtime and makes "find usages" useless. For queries, projecting directly in the EF query (`.Select(p => new ProductListItem { ... })`) means Postgres returns only the columns actually used — which structurally prevents the legacy failure of shipping the entire catalogue including base64 image blobs on every request `[L-18]`.
 
 **Cost:** ~150 lines to write and own. Debugging a `Scrutor.Decorate` chain is less documented than MediatR's. And "used MediatR" is a phrase some job descriptions literally list — mitigated by the ADR, since *understanding the pattern well enough to implement it* is the stronger claim.
+
+**Deeper dive:** [`docs/concepts/mediatr.md`](concepts/mediatr.md) · [`cqrs.md`](concepts/cqrs.md) · [`object-mapping-strategy.md`](concepts/object-mapping-strategy.md) · [`xunit-vs-nunit.md`](concepts/xunit-vs-nunit.md) (for the FluentAssertions/Shouldly half of this decision).
 
 ### C5. `Result<T>` for expected failures, exceptions for bugs — ADR-0005 (Phase 1)
 
@@ -164,6 +197,8 @@ A single `Result → IResult` extension maps `ErrorType` to **RFC 9457 ProblemDe
 
 **Cost:** more verbose than throwing — every call site handles both branches. Requires discipline, since C# has no exhaustiveness checking to enforce it.
 
+**Deeper dive:** [`docs/concepts/result-pattern.md`](concepts/result-pattern.md).
+
 ### C6. No generic repository — ADR-0006 (Phase 1)
 
 `DbContext` **is** the unit of work; `IApplicationDbContext` (just the `DbSet<>`s plus `SaveChangesAsync`) is exposed from Application so handlers stay testable and Application never references the EF provider.
@@ -173,6 +208,8 @@ Narrow, aggregate-specific repositories are added **only where real loading logi
 A generic `IRepository<T>` over EF is the loudest "I read one blog post" signal in .NET: it wraps an abstraction that is already an abstraction, and it destroys `IQueryable` composition, which is the main thing EF is for.
 
 **Cost:** handlers touch `DbContext` directly, so a careless one can write an inefficient query. Caught in review and by the N+1 sweep in Phase 6.
+
+**Deeper dive:** [`docs/concepts/repository-pattern.md`](concepts/repository-pattern.md).
 
 ---
 
@@ -185,6 +222,8 @@ These are the decisions the project is actually about. Each closes a defect clas
 `PlaceOrderCommand` carries **no money fields at all** — only `cartId`, `fulfillmentType`, `slotId`, `addressId`. Prices are read from the database inside the handler and run through `OrderPricingEngine`, a pure function.
 
 The alternative — validating client-supplied totals against recomputed ones — was rejected because it leaves a code path that *accepts* a price. If the field does not exist in the contract, no bug of that shape can exist. GST is extracted from inclusive prices (Indian retail convention) and split CGST/SGST; rounding is `MidpointRounding.AwayFromZero` at 2dp with the grand total reconciled to the sum of lines.
+
+**Deeper dive:** [`docs/concepts/server-authoritative-pricing.md`](concepts/server-authoritative-pricing.md).
 
 ### D2. Inventory concurrency — conditional `UPDATE` — ADR-0007 (Phase 4)
 
@@ -206,9 +245,13 @@ Postgres serialises writers on the row internally. **"Zero rows affected" *is* t
 
 Proven by an integration test firing **20 concurrent orders at 10 units of stock**: exactly 10 succeed, 10 return `OutOfStock`, stock lands on 0, ledger sums to zero.
 
+**Deeper dive:** [`docs/concepts/inventory-concurrency-strategies.md`](concepts/inventory-concurrency-strategies.md).
+
 ### D3. Idempotency keys `[L-15]`
 
 The client generates an `Idempotency-Key` **once when the checkout screen mounts** — not per click — so a double-click, a retry, and a flaky-network resend all collapse to one order. The server `INSERT`s the key first: a **unique-constraint violation is the duplicate detection**, needing no lock. A completed key replays the stored response verbatim; the same key with a different request body returns 422.
+
+**Deeper dive:** [`docs/concepts/idempotency-keys.md`](concepts/idempotency-keys.md).
 
 ### D4. Transactional outbox (Phase 4)
 
@@ -218,15 +261,21 @@ A `SaveChangesInterceptor` writes domain events to `outbox_messages` **in the sa
 
 **Cost:** ~150 lines plus a polling job, and at-least-once delivery means handlers must be idempotent.
 
+**Deeper dive:** [`docs/concepts/transactional-outbox.md`](concepts/transactional-outbox.md).
+
 ### D5. Order state machine `[L-20]`
 
 `Order` has private setters; the only mutation path is `TransitionTo(status, actor, reason)`, with legal transitions in a `FrozenSet` that **branches on fulfilment type** (pickup and delivery have genuinely different lifecycles). Illegal transitions return `Result.Failure`, never an exception and never a silent no-op. Every transition writes `order_status_history`.
 
 In the legacy app the admin "process order" screen was a copy-paste of the customer cart page, so **no order could ever be marked shipped** — and since shipping was the only thing that decremented stock, inventory was never decremented at all. A typed transition matrix with a `[Theory]` over legal and illegal pairs turns that from an invisible gap into a failing test.
 
+**Deeper dive:** [`docs/concepts/state-machine-pattern.md`](concepts/state-machine-pattern.md).
+
 ### D6. Server-side cart in Postgres, not Redis or `localStorage`
 
 The legacy cart lived in `localStorage`, so it had no server-side existence and could not participate in a transaction with order creation `[L-15]`. Redis was rejected as the source of truth because an eviction or restart silently loses a customer's cart — "I used Redis for the cart" is a common answer with a data-loss failure mode. Postgres holds the truth; Redis caches only the derived header-badge summary.
+
+**Deeper dive:** [`docs/concepts/cart-storage-strategy.md`](concepts/cart-storage-strategy.md).
 
 ---
 
@@ -242,6 +291,8 @@ An external provider was rejected because auth *is* part of what this project ne
 
 **Chosen:** Identity for credential storage, with the **token layer built by hand** — that is where the actual engineering signal is (E2).
 
+**Deeper dive:** [`docs/concepts/authentication-framework-choice.md`](concepts/authentication-framework-choice.md).
+
 ### E2. In-memory access token + opaque rotating refresh cookie
 
 **Options:** JWT in `localStorage` · JWT in an `HttpOnly` cookie the API reads · short access token in memory + opaque refresh token in a scoped cookie.
@@ -254,6 +305,8 @@ With **rotation and reuse detection**: every refresh issues a new token and mark
 
 **Cost:** a hard refresh in the browser loses the in-memory access token, requiring a silent refresh round-trip on load.
 
+**Deeper dive:** [`docs/concepts/jwt-refresh-token-strategy.md`](concepts/jwt-refresh-token-strategy.md).
+
 ### E3. Resource-based authorization over route middleware
 
 Route-level middleware is authorization enforced by *remembering to add it* — and the legacy app proves it will eventually be forgotten. Every admin route was correctly gated except one: `DELETE /reviews` shipped with authentication but no ownership check, so any logged-in user could delete anyone's review `[L-05]`. Meanwhile all nine frontend admin guards were inert because the prop was passed to the wrong component `[L-06]`.
@@ -261,6 +314,8 @@ Route-level middleware is authorization enforced by *remembering to add it* — 
 **Chosen:** resource-based `IAuthorizationHandler`s (`OrderOwnerOrStoreStaff`, `ReviewAuthorOrStoreStaff`) so the check is a property of the resource, backed by database constraints, and verified by a `[Theory]` that iterates **every** protected endpoint asserting 403 for a plain customer. A newly added unguarded route fails CI. Client-side guards are cosmetic by design.
 
 Cross-tenant reads return **404, not 403**, so the API never confirms that another store's record exists.
+
+**Deeper dive:** [`docs/concepts/authorization-strategy.md`](concepts/authorization-strategy.md).
 
 ---
 
@@ -274,17 +329,25 @@ A generated `tsvector` column with a GIN index, queried through `EF.Functions.We
 
 **Cost:** no distributed scaling path without a later migration; fewer relevance-tuning knobs.
 
+**Deeper dive:** [`docs/concepts/search-strategy.md`](concepts/search-strategy.md).
+
 ### F2. Object storage over base64-in-database `[L-18]`
 
 The legacy app stored images as base64 data URIs inside MongoDB documents — ~33% payload inflation, uncacheable by any CDN, and hard against the 16 MB document ceiling. Images become `object_key` strings; bytes live in Cloudflare R2 (zero egress fees, which matters for a demo you cannot afford to have hammered), with MinIO locally exposing the identical S3 API. Admin uploads go **direct to storage via presigned PUT**, so image bytes never pass through the API.
+
+**Deeper dive:** [`docs/concepts/image-storage-strategy.md`](concepts/image-storage-strategy.md).
 
 ### F3. Hangfire over bare hosted services — ADR-0012 (Phase 5)
 
 Jobs survive restarts, retry with backoff, and the dashboard is a screenshot. It is also what .NET shops actually run, so it is shared vocabulary in an interview. **Cost:** its own schema and a dashboard that must be secured.
 
+**Deeper dive:** [`docs/concepts/background-jobs-strategy.md`](concepts/background-jobs-strategy.md).
+
 ### F4. `HybridCache` over raw `IDistributedCache` (Phase 6)
 
 Shipped in .NET 9: L1 in-process plus L2 Redis, with **built-in stampede protection** (concurrent misses collapse to one factory call) and tag-based invalidation. Using it correctly signals currency with the platform.
+
+**Deeper dive:** [`docs/concepts/caching-strategy.md`](concepts/caching-strategy.md).
 
 ### F5. Single-database multi-tenancy with a `store_id` discriminator — ADR-0010 (Phase 2)
 
@@ -298,11 +361,15 @@ Single-tenant contradicts the product vision — "help local kirana stores get o
 
 **Cost:** every query carries a filter; noisy-neighbour isolation is nonexistent; a bug in the filter convention is a cross-tenant leak, so the isolation test is mandatory rather than nice-to-have.
 
+**Deeper dive:** [`docs/concepts/multi-tenancy-strategy.md`](concepts/multi-tenancy-strategy.md).
+
 ### F6. Migrations at release, not at startup — ADR-0011 (Phase 6)
 
 `Database.Migrate()` in `Program.cs` races across instances, requires DDL permissions at runtime, and offers no rollback point. Instead CI generates an idempotent SQL script as a reviewable build artifact, deploy applies it as a step **before** the new image rolls, the runtime database user has **no DDL permission**, and `/health/ready` fails when migrations are pending — so a mismatched deploy fails its probe instead of half-working.
 
 Migrations must be **expand/contract**: add nullable, backfill, tighten later. Never a destructive rename in one step.
+
+**Deeper dive:** [`docs/concepts/database-migration-deployment.md`](concepts/database-migration-deployment.md).
 
 ---
 
@@ -320,6 +387,8 @@ The in-memory provider does not enforce constraints, does not support transactio
 
 > **A trap worth naming:** `deploy/postgres/init.sql` creates the Postgres extensions for the Compose container only. Testcontainers starts a *different* database with no init script. Extensions must therefore be created **in an EF migration**, or tests pass locally and fail in CI.
 
+**Deeper dive:** [`docs/concepts/integration-testing-strategy.md`](concepts/integration-testing-strategy.md).
+
 ### G2. No global coverage target
 
 Chasing a repo-wide 80% on a project this size burns thirty hours writing tests for DTO mappers. Targets are set per layer instead: **Domain ≥85%, and 100% of the pricing engine and state machine**; every Application command gets at least one happy and one failure test **driven through the real API**; the API layer is covered contract-level with authorization asserted on every protected endpoint.
@@ -329,6 +398,8 @@ Consequently there is no `Application.UnitTests` project — testing a handler a
 ### G3. Architecture tests as executable rules
 
 ~50 lines of NetArchTest asserting that `Domain` references nothing, `Application` never sees EF Core, entities have no public setters, handlers are sealed and internal, and every `ITenantEntity` has a query filter. Cheap, and it means the architecture in Part 1 cannot quietly erode over fourteen weeks.
+
+**Deeper dive:** [`docs/concepts/architecture-testing.md`](concepts/architecture-testing.md).
 
 ---
 
@@ -340,11 +411,15 @@ Create React App is deprecated and unmaintained. The legacy frontend ships **bot
 
 **Chosen:** Vite, TypeScript in strict mode, Redux Toolkit + RTK Query replacing ~30 hand-rolled thunks, Tailwind + shadcn/ui.
 
+**Deeper dive:** [`docs/concepts/frontend-stack-choice.md`](concepts/frontend-stack-choice.md).
+
 ### H2. Generated API client from OpenAPI
 
 The TypeScript client is generated from the API's OpenAPI document in CI, with a check that fails the build if the committed client is stale. End-to-end type safety from the C# handler signature to the React prop, with zero hand-written API types.
 
 This is the permanent structural fix for `[L-12]`: the legacy server returned `{success, error}` while every client read `.message`, so **every error message in the entire application displayed `undefined`** — two mismatched string literals that nothing could catch, because nothing typed the boundary.
+
+**Deeper dive:** [`docs/concepts/api-client-codegen.md`](concepts/api-client-codegen.md).
 
 ---
 
@@ -358,6 +433,8 @@ Stripe India requires a registered business entity to onboard, so a working demo
 
 **The webhook is the source of truth, never the client** `[L-02]`. Signature verification runs over the **raw request body** (deserializing and re-serializing breaks the signature — the single most common webhook bug), events are recorded in `payment_events` keyed on the provider event id so replays are no-ops, and a daily reconciliation job diffs the provider's payment list against ours.
 
+**Deeper dive:** [`docs/concepts/payment-gateway-choice.md`](concepts/payment-gateway-choice.md).
+
 ### I2. Free-tier hosting, composed to hide the cold start
 
 Render's free tier sleeps after 15 minutes, and its free Postgres **expires after 90 days** — which would silently kill the demo months later, right when someone clicks the link.
@@ -365,6 +442,8 @@ Render's free tier sleeps after 15 minutes, and its free Postgres **expires afte
 **Chosen composition:** SPA on **Cloudflare Pages** (no cold start — the link always feels instant), Postgres on **Neon** (no 90-day expiry), Redis on **Upstash**, images on **Cloudflare R2**, API on Render free Docker with a cron ping keeping it warm. The SPA renders its shell from the CDN immediately and shows a "waking the demo server" state, so a cold start reads as loading rather than broken.
 
 Azure Container Apps with committed Bicep remains the documented production target — the strongest platform signal for a C# employer — if budget ever allows.
+
+**Deeper dive:** [`docs/concepts/hosting-strategy.md`](concepts/hosting-strategy.md).
 
 ---
 
@@ -447,7 +526,7 @@ HybridCache with tag invalidation, rate limiting, index review with `EXPLAIN ANA
 
 | Area | Decision | Chosen over | ADR |
 |---|---|---|---|
-| Platform | ASP.NET Core (C#) | Node/TypeScript, hybrid | — |
+| Platform | ASP.NET Core (C#) | Node/TypeScript, hybrid, Python, Rust, Go, Java | — |
 | Platform | .NET 10 LTS | .NET 9 STS | [0013](adr/0013-target-dotnet-10-lts.md) |
 | Data | PostgreSQL + EF Core | MongoDB, split store | [0002](adr/0002-postgresql-over-mongodb.md) |
 | Migration | Clean-room rewrite | Strangler-fig, in-place refactor | [0001](adr/0001-clean-room-rewrite-over-strangler-fig.md) |

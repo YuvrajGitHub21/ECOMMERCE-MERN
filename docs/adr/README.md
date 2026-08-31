@@ -35,3 +35,4 @@ Recorded here so the numbering is stable and the intent is visible before the co
 
 - [`docs/engineering-decisions.md`](../engineering-decisions.md) — the narrative overview of every decision with its rejected alternatives, plus the phase-by-phase roadmap. Start there for the whole picture; come here for the formal record of any single decision.
 - [`docs/legacy-audit.md`](../legacy-audit.md) — the 20 defects in the pre-rewrite system, each mapped to the design decision that makes its class of bug unrepresentable.
+- [`docs/plans/`](../plans/README.md) — the original working plans written before each phase began.
