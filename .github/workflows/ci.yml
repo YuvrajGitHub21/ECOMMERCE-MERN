@@ -1,0 +1,74 @@
+# Every push and every pull request. The backend job is the gate on `main` and
+# `development`; branch protection requires it.
+name: CI
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+
+# A new push to the same branch cancels the run already in flight. Without this a busy
+# branch queues runs that are obsolete before they start.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend — build, format, test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          # global.json pins 10.0.200 with rollForward: latestFeature, so the runner may
+          # legitimately install a higher patch. Pinning an exact version here would fight it.
+          global-json-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          # Central Package Management means every version lives in one file, so that file
+          # is the whole cache key. No globbing over nine project files.
+          key: nuget-${{ runner.os }}-${{ hashFiles('backend/Directory.Packages.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore backend/GroceryEasy.sln
+
+      # Restores dotnet-ef at the version pinned in .config/dotnet-tools.json, so the runner
+      # and every developer machine agree. Not needed to test, but it keeps the manifest honest —
+      # a broken manifest otherwise goes unnoticed until someone adds a migration.
+      - name: Restore local tools
+        run: dotnet tool restore
+
+      # .editorconfig is enforced, not advisory. Runs before the build so a formatting failure
+      # reports in seconds rather than after the whole solution compiles.
+      - name: Verify formatting
+        run: dotnet format backend/GroceryEasy.sln --verify-no-changes --no-restore
+
+      - name: Build
+        run: dotnet build backend/GroceryEasy.sln --configuration Release --no-restore -warnaserror
+
+      # Note --solution: `dotnet test <path-to-sln>` is rejected by the .NET 10 SDK.
+      #
+      # Testcontainers needs no setup on ubuntu-latest; the Docker socket is already there and
+      # the PostgreSQL 17 image is pulled by the harness on first use.
+      - name: Test
+        run: dotnet test --solution backend/GroceryEasy.sln --configuration Release --no-build
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/TestResults/**'
+          if-no-files-found: ignore
+          retention-days: 7
