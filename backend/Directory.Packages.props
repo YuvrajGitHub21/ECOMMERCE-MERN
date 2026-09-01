@@ -36,12 +36,17 @@
       ADR-0004, while FluentValidation remains Apache-2.0 and is used freely here.
     -->
     <PackageVersion Include="FluentValidation" Version="12.1.1" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
     <!-- Assembly scanning and, more importantly, open-generic Decorate<> for the
          handler pipeline. Replaces the part of MediatR that ADR-0004 rules out. -->
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.17.2" />
     <PackageVersion Include="Scrutor" Version="7.0.0" />
+    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
   </ItemGroup>
   <ItemGroup Label="Infrastructure">
     <!--
@@ -50,7 +55,14 @@
       PascalCase identifiers that every hand-written SQL statement then has to quote.
     -->
     <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
+    <!-- SMTP client for the verification and reset emails. MailKit, not System.Net.Mail's
+         SmtpClient, which Microsoft documents as obsolete for new work and which does not
+         handle modern TLS negotiation properly. -->
+    <PackageVersion Include="MailKit" Version="4.17.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.11" />
+    <!-- Signs access tokens. The modern handler, not the older System.IdentityModel.Tokens.Jwt
+         one: same tokens, measurably faster, and the type the JwtBearer stack now uses itself. -->
+    <PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.22.0" />
     <!-- Design-time only: it carries the migrations tooling and must never ship in
          the runtime output. The PrivateAssets metadata that enforces that lives on
          the PackageReference in Infrastructure, not here. -->

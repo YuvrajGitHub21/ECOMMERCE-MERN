@@ -4,13 +4,33 @@
     <ProjectReference Include="..\GroceryEasy.Application\GroceryEasy.Application.csproj" />
   </ItemGroup>
 
+  <!--
+    Infrastructure owns authentication, and two pieces of that live in the ASP.NET Core shared
+    framework rather than in any standalone package:
+
+      * IdentityBuilder.AddDefaultTokenProviders(), which supplies the email-confirmation and
+        password-reset token providers, and the DataProtection stack those sit on.
+      * OptionsBuilder.ValidateDataAnnotations(), which is what makes ValidateOnStart able to
+        reject a bad configuration at boot.
+
+    A FrameworkReference costs nothing at publish time — the runtime is already there — and is
+    the documented way to reach these from a class library. It does NOT weaken the layering rule
+    that matters: the architecture tests assert that *Application* stays free of Infrastructure
+    and of the database provider, and this project is Infrastructure.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="EFCore.NamingConventions" />
+    <PackageReference Include="MailKit" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
   </ItemGroup>
 

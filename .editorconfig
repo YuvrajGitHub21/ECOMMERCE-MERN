@@ -73,6 +73,18 @@ dotnet_naming_symbols.interface_symbol.applicable_kinds = interface
 dotnet_naming_style.prefix_i_style.required_prefix = I
 dotnet_naming_style.prefix_i_style.capitalization = pascal_case
 
+# Constants first. Naming rules are matched in order and the first match wins, so this must
+# precede the private-field rule below — a `private const` is also a field, and without this it
+# would be told to become _screamingIntoTheVoid. The comment above always said constants are
+# PascalCase; this is the rule that actually makes that true.
+dotnet_naming_rule.constants_pascal_case.severity = warning
+dotnet_naming_rule.constants_pascal_case.symbols = constant_symbol
+dotnet_naming_rule.constants_pascal_case.style = pascal_case_style
+dotnet_naming_symbols.constant_symbol.applicable_kinds = field
+dotnet_naming_symbols.constant_symbol.applicable_accessibilities = *
+dotnet_naming_symbols.constant_symbol.required_modifiers = const
+dotnet_naming_style.pascal_case_style.capitalization = pascal_case
+
 dotnet_naming_rule.private_fields_underscore.severity = warning
 dotnet_naming_rule.private_fields_underscore.symbols = private_field_symbol
 dotnet_naming_rule.private_fields_underscore.style = underscore_camel_style
