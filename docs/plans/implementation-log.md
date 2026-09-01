@@ -126,4 +126,115 @@ dotnet format backend/GroceryEasy.sln --include backend/src/GroceryEasy.Infrastr
 
 ---
 
+### Entry 1.5 — Identity and the token layer
+
+**What:** `IIdentityService` and `ITokenService` in Application, implemented in Infrastructure over ASP.NET Core Identity; seven auth slices plus `GET /api/users/me`.
+
+#### 1.5a — Auth handlers live in Application behind two narrow interfaces
+
+**Why:** `UserManager<TUser>` is generic over a type deriving from a NuGet base class, so it cannot cross into Application without breaking the architecture rule. The seam is two interfaces returning `Result` and small records — never `IdentityResult`, never `ApplicationUser`. The moment a framework type appears in those signatures the abstraction is only pretending.
+
+**Alternatives:** putting the auth slices in Infrastructure (loses the dispatcher pipeline — validation, logging, transaction — for exactly the endpoints that most need it); a pure `Domain.User` mirrored onto an Identity type (a synchronisation problem on every field, for a cleaner diagram).
+
+#### 1.5b — Reuse detection must commit outside the request transaction ★
+
+**The most important thing found in this phase, and it was found by testing, not by reading.**
+
+Reuse detection ends by returning `Result.Failure`. `CommandTransactionBehavior` rolls back on failure. So the first implementation revoked the whole token family and then **threw the revocation away** — the replay correctly returned 401, and the attacker's successor token kept working. Verified against a running server: step 3 gave 401, step 4 gave **200**.
+
+The fix is a deliberate second connection. `RevokeFamilyOutOfBandAsync` takes a fresh scope, gets its own `ApplicationDbContext`, revokes and commits independently. That is correct in principle and not a workaround: revoking a leaked lineage is a security action that must not be conditional on the request that revealed it succeeding.
+
+**Alternatives:** returning success from the reuse branch so the transaction commits (would mean answering a detected attack with 200); excluding refresh from the transaction behaviour (the rotate path genuinely needs atomicity — a crash between revoking and inserting the successor logs an honest user out).
+
+**The test that now guards it** asserts both halves — the replay is rejected *and* the successor stops working. A test checking only the replay would have passed against the broken version.
+
+#### 1.5c — `EnableRetryOnFailure` removed
+
+**What:** added in Task 1.4, removed here. The retrying execution strategy refuses to run inside a user-initiated transaction, and every command opens one, so it broke every write endpoint — surfaced on the first registration attempt as a 500.
+
+**Why not the documented fix.** Wrapping the unit in `Database.CreateExecutionStrategy().ExecuteAsync(...)` re-runs the whole handler, and `RegisterCommandHandler` sends a verification email — a retry would send it twice.
+
+**Deferred to:** Phase 4 for the outbox (which moves side effects off the request path and makes handlers genuinely replayable), then Phase 6 for the free-tier database, which is where transient failures actually begin.
+
+#### 1.5d — One phone column, and two fields deferred
+
+Covered in 1.4c and 1.4d. `default_store_id` and `legacy_mongo_id` remain deferred to Phase 2.
+
+#### 1.5e — Skipped: revoking refresh families on password reset
+
+**Skipped deliberately.** A password reset rotates Identity's security stamp, which invalidates every *access* token immediately because the stamp is re-checked per request. Existing *refresh* families are not revoked. Doing so needs a "revoke every family for this user" path that Phase 1 has no second caller for, and the fifteen-minute access-token window bounds the exposure. Worth adding when the admin console gains "sign out everywhere" in Phase 5.
+
+### Entry 1.6 — The API surface
+
+**What:** `IEndpoint` convention with assembly scan, one `Result` to ProblemDetails mapping, global exception handler, correlation-id middleware, Serilog, OpenAPI with Scalar, split liveness and readiness health checks, options validated at startup.
+
+#### 1.6a — Liveness and readiness are genuinely different checks
+
+`/health/live` excludes every check by predicate; `/health/ready` runs the database check including `GetPendingMigrationsAsync()`. Liveness answers "should this process be restarted", and a database outage is not a reason to restart a healthy process. Readiness answers "should traffic come here", and a container whose schema is behind must fail it — which is what stops a mismatched deployment from going live and failing one request at a time.
+
+#### 1.6b — JWT bearer options configured through the options system
+
+**What:** `AddOptions<JwtBearerOptions>(...).Configure<IOptions<JwtOptions>>(...)` rather than resolving inside the `AddJwtBearer` callback.
+
+**Why:** the obvious version calls `services.BuildServiceProvider()` inside the callback, which builds a **second container** with its own singletons that is never disposed. It appears to work and quietly doubles every singleton in the application. This was written the wrong way first and corrected before commit.
+
+#### 1.6c — `.editorconfig` gained the constants rule it always claimed to have
+
+The file's comment said "constants are PascalCase" but no such rule existed, so the private-field rule caught private constants and demanded `_underscore`. Added the missing rule ahead of the field rule, since first match wins.
+
+### Entry 1.7 — Architecture tests
+
+**What:** six NetArchTest rules. **This is also what made `dotnet test` exit 0 for the first time** — a test project with zero tests fails the whole run under Microsoft Testing Platform with exit code 8, so the empty architecture project had been breaking the suite before it asserted anything.
+
+**One rule is deliberately weaker than the brief specified.** The brief said Application must not reference `Microsoft.EntityFrameworkCore`. It does, deliberately, for `DbSet<T>` and the transaction handle on `IApplicationDbContext` — see ADR-0006. The rule asserts absence of the **provider** (Npgsql) instead, which is the boundary that actually matters. A rule contradicting deliberate working code gets deleted the first time it fires.
+
+**Migrations are excluded** from the public-surface rule: Entity Framework emits them public with no supported alternative, and listing each one would break the test on every `migrations add`.
+
+### Entry 1.8 — Integration harness
+
+**What:** `IntegrationTestWebAppFactory` over Testcontainers PostgreSQL 17, Respawn between tests, 21 auth tests. Only the SMTP transport is substituted — everything else is the real thing.
+
+Two harness bugs, both worth recording because both produced errors pointing away from the cause:
+
+**`ConfigureAppConfiguration` lost to `appsettings.Development.json`.** The factory's callback is appended to a configuration `WebApplication.CreateBuilder` has already built, and the Development file's connection string kept winning. Migrations were applied to the developer's local database on port 5432 while Respawn inspected the empty container and reported *"No tables found"*. Twenty-one tests failed. `UseSetting` writes host configuration, which is established first, and wins.
+
+**Migrations must run before anything touches `Services`.** `WebApplicationFactory` starts the host lazily on first access, and `Program.cs` seeds roles during startup — so migrating through a scope taken from `Services` is already too late. The stack trace pointed at `RoleSeeder` and said nothing about ordering. Fixed by migrating a standalone `DbContext` first, which also matches production, where migrations are a release step that completes before the new image starts.
+
+**Reading the token out of the email, rather than from `UserManager`,** is deliberate: it exercises the real link-building code, so the test would catch a link built from the wrong base address — which is exactly L-09.
+
+### Entry 1.9 — Continuous integration
+
+`.github/workflows/ci.yml`. Format verification runs **before** the build so a formatting failure reports in seconds. The cache key is `Directory.Packages.props` alone, which Central Package Management makes sufficient. `dotnet test --solution` — the bare solution path is rejected by this software development kit, which the original brief got wrong.
+
+**Not done, and it needs a person:** branch protection on `main` and `development` requiring this check. It is a GitHub settings change, not a file, so it cannot be made from here.
+
+### Entry 1.10 — Decision records
+
+ADRs 0003, 0004, 0005, 0006 and 0014 written and moved from *Planned* to *Accepted*. Each ends with consequences split positive and negative.
+
+---
+
+## Phase 1 — verification
+
+Run at the close of the phase, against [`phase-gates.md`](phase-gates.md).
+
+| Gate | Result |
+|---|---|
+| `git diff v1-legacy-node -- legacy-node/` | empty |
+| `dotnet build` | **0 warnings, 0 errors** |
+| `dotnet format --verify-no-changes` | clean |
+| `dotnet test --solution` | **75 passed, 0 failed, exit 0** — Debug and Release |
+| Refresh-token reuse detection | replay rejected **and** successor revoked; asserted by a named test |
+| Architecture tests | 6 rules, all pass |
+| `/health/ready` | 200 migrated; the check fails on a pending migration by construction |
+| Missing configuration kills the process at boot | `ValidateOnStart` on `Jwt`, `Frontend`, `Email` |
+| ADRs 0003–0006, 0014 | written, index updated |
+| Branch protection | **outstanding — needs a GitHub settings change** |
+
+Verified by hand against a running server as well as by the suite: registration, duplicate registration in different casing (409, one user row), email verification through Mailpit, login, rotation, replay, family revocation, `/api/users/me` authenticated and not, forgot-password answering identically for known and unknown addresses, login answering identically for unknown address and wrong password, and a deleted user's still-valid token returning **401, not 500**.
+
+**Pull request:** https://github.com/YuvrajGitHub21/ECOMMERCE-MERN/pull/new/feat/phase-1-api-skeleton → base `development`
+
+---
+
 *Entries are appended below as work proceeds.*
