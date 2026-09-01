@@ -1,6 +1,15 @@
-var builder = WebApplication.CreateBuilder(args);
+using GroceryEasy.Application;
+using GroceryEasy.Infrastructure;
 
-var app = builder.Build();
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddApplication();
+builder.Services.AddInfrastructure(builder.Configuration);
+
+WebApplication app = builder.Build();
+
+app.MapGet("/", () => Results.Redirect("/scalar"))
+    .ExcludeFromDescription();
 
 await app.RunAsync();
 

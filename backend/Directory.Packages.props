@@ -43,6 +43,20 @@
          handler pipeline. Replaces the part of MediatR that ADR-0004 rules out. -->
     <PackageVersion Include="Scrutor" Version="7.0.0" />
   </ItemGroup>
+  <ItemGroup Label="Infrastructure">
+    <!--
+      snake_case table and column names come from EFCore.NamingConventions, NOT from
+      Npgsql. Easy to assume otherwise, and the failure mode is a database full of
+      PascalCase identifiers that every hand-written SQL statement then has to quote.
+    -->
+    <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.11" />
+    <!-- Design-time only: it carries the migrations tooling and must never ship in
+         the runtime output. The PrivateAssets metadata that enforces that lives on
+         the PackageReference in Infrastructure, not here. -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+  </ItemGroup>
   <ItemGroup Label="Testing">
     <PackageVersion Include="Shouldly" Version="4.3.0" />
     <PackageVersion Include="xunit.v3" Version="4.0.0" />
